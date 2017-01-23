@@ -10,6 +10,18 @@ void readFirstLine(long* n, long* k, long* v) {
     scanf("%ld%ld%ld", n, k, v);
 }
 
+Node* createNode() {
+    Node* node = malloc(sizeof(Node));
+    node->var = -1;
+    node->num = -1;
+    node->parents = NULL;
+    node->children = NULL;
+    node->pipesToChildren = NULL;
+    node->pipesToParents = NULL;
+    node->pipeToMain[0] = -1;
+    node->pipeToMain[1] = -1;
+}
+
 void insertNode(Node* node, NodeList** list) {
     NodeList* newList = malloc(sizeof(NodeList));
     newList->node = node;
@@ -19,15 +31,10 @@ void insertNode(Node* node, NodeList** list) {
 
 Node* parseNode(char* s, long b, long e, Node** x, Node* currentNode) {
     Node* node;
-    if (currentNode == NULL) {
-        node = malloc(sizeof(Node));
-        node->var = -1;
-        node->num = -1;
-        node->parents = NULL;
-        node->children = NULL;
-    } else {
+    if (currentNode == NULL)
+        node = createNode();
+    else
         node = currentNode;
-    }
 
     while (isspace(s[b]))
         ++b;

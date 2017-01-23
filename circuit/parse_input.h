@@ -11,12 +11,20 @@ typedef enum NodeType {
 
 typedef struct NodeList NodeList;
 
+typedef struct PipeList {
+    int fd[2];
+    struct PipeList* next;
+} PipeList;
+
 typedef struct Node {
     long num; // used only if type is PNUM
     long var; // i from x[i] if applies, -1 in other cases
+    NodeType type;
     NodeList* parents;
     NodeList* children;
-    NodeType type;
+    PipeList* pipesToParents;
+    PipeList* pipesToChildren;
+    int pipeToMain[2];
 } Node;
 
 typedef struct NodeList {
@@ -29,6 +37,8 @@ typedef struct InitializerList {
     long num;
     struct InitializerList* next;
 } InitializerList;
+
+Node* createNode();
 
 void readFirstLine(long* n, long* k, long* v);
 
