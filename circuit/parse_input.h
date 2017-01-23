@@ -25,6 +25,7 @@ typedef struct Node {
   PipeList* pipesToParents;
   PipeList* pipesToChildren;
   int pipeToMain[2];
+  bool threadOpen;
 } Node;
 
 typedef struct NodeList {

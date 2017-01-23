@@ -20,6 +20,7 @@ Node* createNode() {
   node->pipesToParents = NULL;
   node->pipeToMain[0] = -1;
   node->pipeToMain[1] = -1;
+  node->threadOpen = false;
 }
 
 void insertNode(Node* node, NodeList** list) {
@@ -100,10 +101,16 @@ Node* parseNode(char* s, long b, long e, Node** x, Node* currentNode) {
 
   // check if VAR
   if (s[b] == 'x') {
-    free(node);
     long var;
     sscanf(s + b, "x[%ld]", &var);
-    return x[var];
+    if (currentNode == NULL) {
+      free(node);
+      return x[var];
+    } else {
+      insertNode(x[var], &node->parents);
+      insertNode(node, &x[var]->children);
+      return node;
+    }
   }
 
   free(node);
@@ -115,7 +122,7 @@ bool readEquation(Node** x) {
   char s[1000];
   long var;
   scanf("%*d x[%ld] = %[^\n]s", &var, s);
-  if (x[var]->parents != NULL)
+  if (x[var]->parents != NULL || x[var]->type != VAR)
     return false;
 
   parseNode(s, 0, (strlen(s)) - 1, x, x[var]);
