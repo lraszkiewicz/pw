@@ -17,12 +17,18 @@ void insertNode(Node* node, NodeList** list) {
     *list = newList;
 }
 
-Node* parseNode(char* s, long b, long e, Node** x) {
-    Node* node = malloc(sizeof(Node));
-    node->var = -1;
-    node->num = -1;
-    node->parents = NULL;
-    node->children = NULL;
+Node* parseNode(char* s, long b, long e, Node** x, Node* currentNode) {
+    Node* node;
+    if (currentNode == NULL) {
+        node = malloc(sizeof(Node));
+        node->var = -1;
+        node->num = -1;
+        node->parents = NULL;
+        node->children = NULL;
+    } else {
+        node = currentNode;
+    }
+
     while (isspace(s[b]))
         ++b;
     while (isspace(s[e]))
@@ -63,9 +69,9 @@ Node* parseNode(char* s, long b, long e, Node** x) {
         }
     }
     if (endFor) {
-        insertNode(parseNode(s, mid + 1, e, x), &node->parents);
+        insertNode(parseNode(s, mid + 1, e, x, NULL), &node->parents);
         insertNode(node, &node->parents->node->children);
-        insertNode(parseNode(s, b, mid - 1, x), &node->parents);
+        insertNode(parseNode(s, b, mid - 1, x, NULL), &node->parents);
         insertNode(node, &node->parents->node->children);
         return node;
     }
@@ -73,7 +79,7 @@ Node* parseNode(char* s, long b, long e, Node** x) {
     // check if MINUS
     if (s[b] == '-') {
         node->type = MINUS;
-        insertNode(parseNode(s, b + 1, e, x), &node->parents);
+        insertNode(parseNode(s, b + 1, e, x, NULL), &node->parents);
         insertNode(node, &node->parents->node->children);
         return node;
     }
@@ -93,6 +99,7 @@ Node* parseNode(char* s, long b, long e, Node** x) {
         return x[var];
     }
 
+    free(node);
     return NULL;
 }
 
@@ -104,11 +111,12 @@ bool readEquation(Node** x) {
     if (x[var]->parents != NULL)
         return false;
 
-    Node* node = parseNode(s, 0, (strlen(s)) - 1, x);
-    node->children = x[var]->children;
-    free(x[var]);
-    x[var] = node;
-    node->var = var;
+    parseNode(s, 0, (strlen(s)) - 1, x, x[var]);
+//    Node* node = parseNode(s, 0, (strlen(s)) - 1, x, x[var]);
+//    node->children = x[var]->children;
+//    free(x[var]);
+//    x[var] = node;
+//    node->var = var;
     return true;
 }
 
