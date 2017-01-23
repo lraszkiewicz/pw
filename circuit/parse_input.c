@@ -10,8 +10,19 @@ void readFirstLine(long* n, long* k, long* v) {
     scanf("%ld%ld%ld", n, k, v);
 }
 
-Node* parseNode(char* s, long b, long e) {
+void insertNode(Node* node, NodeList** list) {
+    NodeList* newList = malloc(sizeof(NodeList));
+    newList->node = node;
+    newList->next = *list;
+    *list = newList;
+}
+
+Node* parseNode(char* s, long b, long e, Node** x) {
     Node* node = malloc(sizeof(Node));
+    node->var = -1;
+    node->num = -1;
+    node->parents = NULL;
+    node->children = NULL;
     while (isspace(s[b]))
         ++b;
     while (isspace(s[e]))
@@ -52,48 +63,53 @@ Node* parseNode(char* s, long b, long e) {
         }
     }
     if (endFor) {
-        node->parents = malloc(sizeof(NodeList));
-        node->parents->node = parseNode(s, b, mid - 1);
-        node->parents->next = malloc(sizeof(NodeList));
-        node->parents->next->node = parseNode(s, mid + 1, e);
-        node->parents->next->next = NULL;
+        insertNode(parseNode(s, mid + 1, e, x), &node->parents);
+        insertNode(node, &node->parents->node->children);
+        insertNode(parseNode(s, b, mid - 1, x), &node->parents);
+        insertNode(node, &node->parents->node->children);
         return node;
     }
 
     // check if MINUS
     if (s[b] == '-') {
         node->type = MINUS;
-        node->parents = malloc(sizeof(NodeList));
-        node->parents->node = parseNode(s, b + 1, e);
-        node->parents->next = NULL;
+        insertNode(parseNode(s, b + 1, e, x), &node->parents);
+        insertNode(node, &node->parents->node->children);
         return node;
     }
 
     // check if PNUM
-    if (s[b] >= '0' && s[b] <= '9') {
+    if ('0' <= s[b] && s[b] <= '9') {
         node->type = PNUM;
-        node->parents = NULL;
-        sscanf(s + b, "%ld", &node->value);
+        sscanf(s + b, "%ld", &node->num);
         return node;
     }
 
     // check if VAR
     if (s[b] == 'x') {
-        node->type = VAR;
-        node->parents = NULL;
-        sscanf(s + b, "x[%ld]", &node->value);
-        return node;
+        free(node);
+        long var;
+        sscanf(s + b, "x[%ld]", &var);
+        return x[var];
     }
 
     return NULL;
 }
 
-Node* readEquation() {
+// false if error
+bool readEquation(Node** x) {
     char s[1000];
-    long x;
-    scanf("%*d x[%ld] = %[^\n]s", &x, s);
-    // TODO: do something with x
-    return parseNode(s, 0, ((long) strlen(s)) - 1);
+    long var;
+    scanf("%*d x[%ld] = %[^\n]s", &var, s);
+    if (x[var]->parents != NULL)
+        return false;
+
+    Node* node = parseNode(s, 0, (strlen(s)) - 1, x);
+    node->children = x[var]->children;
+    free(x[var]);
+    x[var] = node;
+    node->var = var;
+    return true;
 }
 
 InitializerList* parseInitializerList(char* s) {

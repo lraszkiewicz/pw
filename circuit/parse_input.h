@@ -9,9 +9,13 @@ typedef enum NodeType {
     VAR
 } NodeType;
 
+typedef struct NodeList NodeList;
+
 typedef struct Node {
-    long value; // if type is PNUM or VAR
-    struct NodeList* parents;
+    long num; // used only if type is PNUM
+    long var; // i from x[i] if applies, -1 in other cases
+    NodeList* parents;
+    NodeList* children;
     NodeType type;
 } Node;
 
@@ -28,7 +32,7 @@ typedef struct InitializerList {
 
 void readFirstLine(long* n, long* k, long* v);
 
-Node* readEquation();
+bool readEquation(Node** x);
 
 InitializerList* readInitializerList();
 
