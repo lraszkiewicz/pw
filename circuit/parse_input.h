@@ -1,6 +1,8 @@
 #ifndef CIRCUIT_PARSE_INPUT_H
 #define CIRCUIT_PARSE_INPUT_H
 
+#include <stdbool.h>
+
 typedef enum NodeType {
   SUM,
   MULTIPLY,
@@ -39,11 +41,13 @@ typedef struct InitializerList {
   struct InitializerList* next;
 } InitializerList;
 
+void insertNode(Node* node, NodeList** list);
+
 Node* createNode();
 
 void readFirstLine(long* n, long* k, long* v);
 
-bool readEquation(Node** x);
+bool readEquation(Node** x, NodeList** listOfAllNodes);
 
 InitializerList* readInitializerList();
 

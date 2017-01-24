@@ -5,9 +5,17 @@
 #include <ctype.h>
 
 #include "./parse_input.h"
+#include "clear_memory.h"
 
 void readFirstLine(long* n, long* k, long* v) {
   scanf("%ld%ld%ld", n, k, v);
+}
+
+void insertNode(Node* node, NodeList** list) {
+  NodeList* newList = malloc(sizeof(NodeList));
+  newList->node = node;
+  newList->next = *list;
+  *list = newList;
 }
 
 Node* createNode() {
@@ -21,16 +29,11 @@ Node* createNode() {
   node->pipeToMain[0] = -1;
   node->pipeToMain[1] = -1;
   node->threadOpen = false;
+  return node;
 }
 
-void insertNode(Node* node, NodeList** list) {
-  NodeList* newList = malloc(sizeof(NodeList));
-  newList->node = node;
-  newList->next = *list;
-  *list = newList;
-}
-
-Node* parseNode(char* s, long b, long e, Node** x, Node* currentNode) {
+Node* parseNode(char* s, long b, long e, Node** x, Node* currentNode,
+                NodeList** listOfAllNodes) {
   Node* node;
   if (currentNode == NULL)
     node = createNode();
@@ -77,18 +80,24 @@ Node* parseNode(char* s, long b, long e, Node** x, Node* currentNode) {
     }
   }
   if (endFor) {
-    insertNode(parseNode(s, mid + 1, e, x, NULL), &node->parents);
+    insertNode(parseNode(s, mid + 1, e, x, NULL, listOfAllNodes),
+               &node->parents);
     insertNode(node, &node->parents->node->children);
-    insertNode(parseNode(s, b, mid - 1, x, NULL), &node->parents);
+    insertNode(parseNode(s, b, mid - 1, x, NULL, listOfAllNodes),
+               &node->parents);
     insertNode(node, &node->parents->node->children);
+    if (currentNode == NULL)
+      insertNode(node, listOfAllNodes);
     return node;
   }
 
   // check if MINUS
   if (s[b] == '-') {
     node->type = MINUS;
-    insertNode(parseNode(s, b + 1, e, x, NULL), &node->parents);
+    insertNode(parseNode(s, b + 1, e, x, NULL, listOfAllNodes), &node->parents);
     insertNode(node, &node->parents->node->children);
+    if (currentNode == NULL)
+      insertNode(node, listOfAllNodes);
     return node;
   }
 
@@ -96,6 +105,8 @@ Node* parseNode(char* s, long b, long e, Node** x, Node* currentNode) {
   if ('0' <= s[b] && s[b] <= '9') {
     node->type = PNUM;
     sscanf(s + b, "%ld", &node->num);
+    if (currentNode == NULL)
+      insertNode(node, listOfAllNodes);
     return node;
   }
 
@@ -104,7 +115,7 @@ Node* parseNode(char* s, long b, long e, Node** x, Node* currentNode) {
     long var;
     sscanf(s + b, "x[%ld]", &var);
     if (currentNode == NULL) {
-      free(node);
+      freeNode(node);
       return x[var];
     } else {
       insertNode(x[var], &node->parents);
@@ -113,19 +124,19 @@ Node* parseNode(char* s, long b, long e, Node** x, Node* currentNode) {
     }
   }
 
-  free(node);
+  freeNode(node);
   return NULL;
 }
 
 // false if error
-bool readEquation(Node** x) {
+bool readEquation(Node** x, NodeList** listOfAllNodes) {
   char s[1000];
   long var;
   scanf("%*d x[%ld] = %[^\n]s", &var, s);
   if (x[var]->parents != NULL || x[var]->type != VAR)
     return false;
 
-  parseNode(s, 0, (strlen(s)) - 1, x, x[var]);
+  parseNode(s, 0, (strlen(s)) - 1, x, x[var], listOfAllNodes);
   return true;
 }
 

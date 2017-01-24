@@ -1,0 +1,70 @@
+Parsowanie równań:
+
+- readEquation rozdziela równanie na lewą i prawą stronę.
+- Prawa strona jest rekurencyjnie parsowana za pomocą funkcji parseNode,
+  która rozbija wyrażenie na możliwie najmniejsze i tworzy potrzebne węzły.
+- Jeżeli węzłem jest x[i], to nie jest tworzony nowy węzeł, tylko brany jest
+  Node z tablicy x[], która przechowuje utworzone na samym początku węzły
+  dla każdego x[0..v-1].
+- Na potrzeby zarządzania pamięcią każdy węzeł dodawany jest do listOfAllNodes,
+  ale ta lista nie jest używana w samym rozwiązaniu.
+- Po sparsowaniu każdego równania i dodaniu odpowiednich krawędzi,
+  z wierzchołka x[0] uruchamiany jest (na odwróconym grafie,
+  tj. idę w kierunku rodziców) algorytm DFS sprawdzający, czy w grafie są cykle.
+  Jeżeli są, wypisywany jest odpowiedni komunikat i program jest przerywany.
+
+Tworzenie łącz procesów:
+
+- Po wczytaniu wszystkich N równań tworzone są łącza i procesy dla każdego
+  węzła w obwodzie. Najpierw tworzone są wszystkie łącza (makePipes), później
+  wszystkie procesy (makeThreads). Rozpoczynam DFS w x[0] i idę w kierunku
+  rodziców, tworząc łącza pomiędzy każdą parą sąsiadów. Dodatkowo
+  dla wierzchołków będących pewną zmienną x[i] tworzę łącza do procesu głównego.
+  Po utworzeniu wszystkich łącz znowu rozpoczynam DFS w x[0] i tworzę proces
+  dla każdego węzła w obwodzie (w szczególności, jeżeli są węzły, które
+  nie tworzą spójnego obdowu z x[0] i nie mają wpływu na wynik,
+  procesy dla nich nie są tworzone).
+- makeThreads zwraca NULL dla procesu głównego i wskaźnik na "swój" Node
+  dla procesów, które reprezentują jakiś Node.
+
+Proces główny:
+
+- Proces główny wczytuje kolejne listy inicjalizacji (parseInitializationList).
+- Po wczytaniu listy inicjalizacji, do każdego wierzchołka x[i], który jest
+  procesem, wysyłane są poprzez łącze trzy liczby:
+  - numer listy inicjalizacji
+  - czy wierzchołek został zainicjalizowany w tej liście
+  - jaką wartość otrzymał w tej liście (-1 jeśli żadną, ale to bez znaczenia)
+- Po przetworzeniu list inicjalizacji proces główny czeka na zakończenie
+  procesów potomnych i kończy działanie.
+
+Procesy potomne (wierzchołki):
+- Proces potomny na początku sprawdza, ile ma rodziców oraz czy powinien
+  otrzymywać dane z wątku głównego. Na tej podstawie tworzy tablicę
+  struct pollfd entries[] oraz tablice do przechowywania danych otrzymanych
+  od rodziców i wątku głównego.
+- Za pomocą funkcji poll() proces czeka na otrzymanie danych od któregoś
+  z rodziców lub od wątku głównego.
+- Po otrzymaniu jakichś danych sprawdzane jest, czy są to wszystkie dane
+  potrzebne do tego, żeby obliczyć wartość w wierzchołku dla tej listy
+  inicjalizacji, dla której zostały te dane otrzymane. Proces musi mieć:
+  - albo informację, że został zainicjalizowany na tej liście
+  - albo wartości od wszystkich swoich rodziców i, jeżeli jest to jakieś x[i],
+         informację, że na tej liście inicjalizacji go nie było.
+  (są też pewne przypadki brzegowe, o których nie widzę sensu pisania)
+  Po spełnieniu jednego z powyższych warunków, węzeł wysyła swoją ustaloną
+  wartość do wszystkich dzieci. Dodatkowo, jeżeli ten proces to x[0],
+  to wypisuje on odpowiednią wartość na wyjście.
+- Jeżeli węzeł nie został zainicjalizowany i nie ma rodziców,
+  to do potomków przekaże, że nie miał on prawidłowej wartości.
+  To samo zrobi, jeżeli nie został zainicjalizowany i któryś z rodziców
+  przekaże mu brak prawidłowej wartości.
+  Jeżeli tak wyjdzie w x[0], wypisywane jest 'F'.
+- Jeżeli wierzchołek już policzył wartość dla wszystkich list inicjalizacji,
+  to jego proces może się zakończyć. Wyjątkiem jest sytuacja, gdzie proces
+  nie odczytał jeszcze wiadomości od wszystkich przodków (np. jak został
+  zainicjalizowany i te wiadomości nie były mu potrzebne).
+  Wtedy będzie on na te wiadomości czekał (chociaż są już bezużyteczne),
+  aby przodkowie nie pisali do zamkniętych łączy.
+  Gdy wszystkie oczekiwane wiadomości zostaną przeczytane,
+  proces może się zamknąć.

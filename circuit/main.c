@@ -8,10 +8,12 @@
 #include <poll.h>
 
 #include "./parse_input.h"
+#include "clear_memory.h"
 
-void catch(const char* fun, int ret) {
+void catch(const char* fun, int ret, NodeList* listOfAllNodes) {
   if (ret == -1) {
     fprintf(stderr, "error in %s(): %d, %s\n", fun, errno, strerror(errno));
+    freeAllNodes(listOfAllNodes);
     exit(1);
   }
 }
@@ -40,11 +42,11 @@ bool hasCycle(Node** x, long v) {
   return dfsCycle(x[0], visited);
 }
 
-void makePipe(Node* parent, Node* child) {
+void makePipe(Node* parent, Node* child, NodeList* listOfAllNodes) {
   PipeList* newPipeParent = malloc(sizeof(PipeList));
   PipeList* newPipeChild = malloc(sizeof(PipeList));
 
-  catch("pipe", pipe(newPipeParent->fd));
+  catch("pipe", pipe(newPipeParent->fd), listOfAllNodes);
   newPipeChild->fd[0] = newPipeParent->fd[0];
   newPipeChild->fd[1] = newPipeParent->fd[1];
 
@@ -55,37 +57,35 @@ void makePipe(Node* parent, Node* child) {
   child->pipesToParents = newPipeChild;
 }
 
-void makePipes(Node* node, int pipesToVars[][2]) {
+void makePipes(Node* node, int pipesToVars[][2], NodeList* listOfAllNodes) {
   if (node->var != -1 && node->pipeToMain[0] == -1) {
-    catch("pipe", pipe(pipesToVars[node->var]));
+    catch("pipe", pipe(pipesToVars[node->var]), listOfAllNodes);
     node->pipeToMain[0] = pipesToVars[node->var][0];
     node->pipeToMain[1] = pipesToVars[node->var][1];
-    printf("pipe to main %ld: %d %d\n", node->var, node->pipeToMain[0], node->pipeToMain[1]);
-    fflush(stdout);
   }
 
   NodeList* current = node->parents;
   while (current != NULL) {
-    makePipe(current->node, node);
-    makePipes(current->node, pipesToVars);
+    makePipe(current->node, node, listOfAllNodes);
+    makePipes(current->node, pipesToVars, listOfAllNodes);
     current = current->next;
   }
 }
 
 // returns Node* - pointer to the node represented by the new process
 //                 or NULL from main process
-Node* makeThreads(Node* node) {
+Node* makeThreads(Node* node, NodeList* listOfAllNodes) {
   if (!node->threadOpen) {
     node->threadOpen = true;
     pid_t pid = fork();
-    catch("fork", pid);
+    catch("fork", pid, listOfAllNodes);
     if (pid == 0)
       return node;
   }
 
   NodeList* current = node->parents;
   while (current != NULL) {
-    Node* tmp = makeThreads(current->node);
+    Node* tmp = makeThreads(current->node, listOfAllNodes);
     if (tmp != NULL)
       return tmp;
     current = current->next;
@@ -98,16 +98,19 @@ int main() {
   long n, k, v;
   readFirstLine(&n, &k, &v);
   Node* x[v];
+  NodeList* listOfAllNodes = NULL;
   for (long i = 0; i < v; ++i) {
     x[i] = createNode();
     x[i]->var = i;
     x[i]->type = VAR;
+    insertNode(x[i], &listOfAllNodes);
   }
   for (long i = 0; i < k; ++i) {
-    bool ok = readEquation(x);
+    bool ok = readEquation(x, &listOfAllNodes);
     if (!ok || hasCycle(x, v)) {
       printf("%ld F\n", i + 1);
       fflush(stdout);
+      freeAllNodes(listOfAllNodes);
       exit(0);
     } else {
       printf("%ld P\n", i + 1);
@@ -118,23 +121,23 @@ int main() {
   // fix for example 3
   if (x[0]->parents == NULL) {
     for (long i = k; i < n; ++i) {
-      printf("%ld F", i + 1);
+      printf("%ld F\n", i + 1);
       fflush(stdout);
     }
+    freeAllNodes(listOfAllNodes);
     exit(0);
   }
 
   int pipesToVars[v][2];
-  makePipes(x[0], pipesToVars);
+  makePipes(x[0], pipesToVars, listOfAllNodes);
 
-  Node* thisNode = makeThreads(x[0]);
+  Node* thisNode = makeThreads(x[0], listOfAllNodes);
 
   if (thisNode == NULL) { // main process
-    printf("%d\n", getpid());
     fflush(stdout);
     for (long i = 0; i < v; ++i)
       if (pipesToVars[i][0] != -1)
-        catch("close", close(pipesToVars[i][0]));
+        catch("close", close(pipesToVars[i][0]), listOfAllNodes);
 
     for (long i = k + 1; i <= n; ++i) {
       InitializerList* initializerList = readInitializerList();
@@ -148,6 +151,8 @@ int main() {
         initValue[current->var] = current->num;
         current = current->next;
       }
+      freeInitializerList(initializerList);
+
       for (long j = 0; j < v; ++j) {
         if (pipesToVars[j][1] != -1) {
           long toSend[3];
@@ -155,32 +160,30 @@ int main() {
           toSend[1] = initialized[j]; // is initialized
           toSend[2] = initialized[j] ? initValue[j] : -1;
           // initialized value, irrelevant if toSend[1] == 0
-          printf("write from main: %d\t%ld %ld %ld\n", pipesToVars[j][1], toSend[0], toSend[1], toSend[2]);
-          fflush(stdout);
-          catch("write", (int) write(pipesToVars[j][1],
-                         toSend,
-                         sizeof(toSend)));
+
+          catch("write",
+                (int) write(pipesToVars[j][1], toSend, sizeof(toSend)),
+                listOfAllNodes);
         }
       }
     }
 
     for (long i = 0; i < v; ++i)
       if (pipesToVars[i][1] != -1)
-        catch("close", close(pipesToVars[i][1]));
+        catch("close", close(pipesToVars[i][1]), listOfAllNodes);
 
-    catch("wait", wait(NULL));
+    catch("wait", wait(NULL), listOfAllNodes);
+    freeAllNodes(listOfAllNodes);
     exit(0);
   } else { // fork
-    printf("%d %ld %ld %d\n", getpid(), thisNode->num, thisNode->var, thisNode->type);
-    fflush(stdout);
     PipeList* pipeList = thisNode->pipesToChildren;
     while (pipeList != NULL) {
-      catch("close", close(pipeList->fd[0]));
+      catch("close", close(pipeList->fd[0]), listOfAllNodes);
       pipeList = pipeList->next;
     }
     pipeList = thisNode->pipesToParents;
     while (pipeList != NULL) {
-      catch("close", close(pipeList->fd[1]));
+      catch("close", close(pipeList->fd[1]), listOfAllNodes);
       pipeList = pipeList->next;
     }
 
@@ -205,8 +208,6 @@ int main() {
     }
     if (readsFromMain) {
       entries[numberOfParents].fd = thisNode->pipeToMain[0];
-      printf("%ld %d, %d %d %ld %ld\n", thisNode->var, getpid(), thisNode->pipeToMain[0], entries[numberOfParents].fd, numberOfParents, numberOfEntries);
-      fflush(stdout);
       entries[numberOfParents].events = POLLIN;
     }
 
@@ -249,46 +250,40 @@ int main() {
 
         pipeList = thisNode->pipesToChildren;
         while (pipeList != NULL) {
-          catch("write", (int) write(pipeList->fd[1], toSend, sizeof(toSend)));
+          catch("write",
+                (int) write(pipeList->fd[1], toSend, sizeof(toSend)),
+                listOfAllNodes);
           pipeList = pipeList->next;
         }
       }
       pipeList = thisNode->pipesToChildren;
       while (pipeList != NULL) {
-        catch("close", close(pipeList->fd[1]));
+        catch("close", close(pipeList->fd[1]), listOfAllNodes);
         pipeList = pipeList->next;
       }
-      // TODO x[0]
+      freeAllNodes(listOfAllNodes);
       exit(0);
     }
-
-    printf("%ld (%d %d): ", thisNode->var, thisNode->pipeToMain[0], thisNode->pipeToMain[1]);
-    for (long j = 0; j < numberOfEntries; ++j)
-      printf("%d ", entries[j].fd);
-    printf("\n");
-    fflush(stdout);
 
     while (finishedInitLists != n - k) {
       for (i = 0; i < numberOfEntries; ++i)
         entries[i].revents = 0;
 
-      catch("poll", poll(entries, (nfds_t) numberOfEntries, -1));
+      catch("poll",
+            poll(entries, (nfds_t) numberOfEntries, -1),
+            listOfAllNodes);
 
       for (i = 0; i < numberOfEntries; ++i) {
         if (entries[i].revents & (POLLIN | POLLERR)) {
           long buf[3];
-          catch("read", (int) read(entries[i].fd, buf, sizeof(buf)));
-          if (buf[0] == 5) {
-            printf("read in %d (%ld): %d\t%ld %ld %ld, i = %ld\n", getpid(),
-                   thisNode->var, entries[i].fd, buf[0], buf[1], buf[2], i);
-            fflush(stdout);
-          }
+          catch("read",
+                (int) read(entries[i].fd, buf, sizeof(buf)),
+                listOfAllNodes);
           long finishedInitList = -1;
           if (i < numberOfParents) { // read from parent
             dataFromParents[buf[0]][i][0] = buf[1];
             dataFromParents[buf[0]][i][1] = buf[2];
             ++howManyParentsRead[buf[0]];
-            printf("%d: hmpr[%ld] = %ld\n", getpid(), buf[0], howManyParentsRead[buf[0]]);
             if (initializations[buf[0]][0] == 0
                 && howManyParentsRead[buf[0]] == numberOfParents)
               finishedInitList = buf[0];
@@ -347,15 +342,9 @@ int main() {
 
             pipeList = thisNode->pipesToChildren;
             while (pipeList != NULL) {
-              if (toSend[0] == 5) {
-                printf("write from %d (%ld): %d\t%ld %ld %ld\n", getpid(),
-                       thisNode->var, pipeList->fd[1], toSend[0], toSend[1],
-                       toSend[2]);
-                fflush(stdout);
-              }
-              catch("write", (int) write(pipeList->fd[1],
-                                         toSend,
-                                         sizeof(toSend)));
+              catch("write",
+                    (int) write(pipeList->fd[1], toSend, sizeof(toSend)),
+                    listOfAllNodes);
               pipeList = pipeList->next;
             }
 
@@ -373,15 +362,16 @@ int main() {
 
     pipeList = thisNode->pipesToParents;
     while (pipeList != NULL) {
-      catch("close", close(pipeList->fd[0]));
+      catch("close", close(pipeList->fd[0]), listOfAllNodes);
       pipeList = pipeList->next;
     }
     pipeList = thisNode->pipesToChildren;
     while (pipeList != NULL) {
-      catch("close", close(pipeList->fd[1]));
+      catch("close", close(pipeList->fd[1]), listOfAllNodes);
       pipeList = pipeList->next;
     }
 
+    freeAllNodes(listOfAllNodes);
     exit(0);
   }
 }
