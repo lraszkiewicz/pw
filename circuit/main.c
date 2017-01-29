@@ -119,7 +119,7 @@ int main() {
   }
 
   // fix for example 3
-  if (x[0]->parents == NULL) {
+  if (x[0]->parents == NULL && x[0]->type != PNUM) {
     for (long i = k; i < n; ++i) {
       printf("%ld F\n", i + 1);
       fflush(stdout);
