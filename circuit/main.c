@@ -8,7 +8,7 @@
 #include <poll.h>
 
 #include "./parse_input.h"
-#include "clear_memory.h"
+#include "./clear_memory.h"
 
 void catch(const char* fun, int ret, NodeList* listOfAllNodes) {
   if (ret == -1) {
@@ -129,6 +129,9 @@ int main() {
   }
 
   int pipesToVars[v][2];
+  for (long i = 0; i < v; ++i)
+    for (long j = 0; j < 2; ++j)
+      pipesToVars[i][j] = -1;
   makePipes(x[0], pipesToVars, listOfAllNodes);
 
   Node* thisNode = makeThreads(x[0], listOfAllNodes);
@@ -311,7 +314,7 @@ int main() {
             } else {
               ++finishedInitLists;
               toSend[0] = finishedInitList;
-              toSend[1] = numberOfParents > 0;
+              toSend[1] = thisNode->type == PNUM ||  numberOfParents > 0;
               for (long j = 0; j < numberOfParents; ++j) {
                 if (dataFromParents[finishedInitList][j][0] == 0) {
                   toSend[1] = 0;
@@ -332,6 +335,7 @@ int main() {
                     toSend[2] = -dataFromParents[finishedInitList][0][1];
                     break;
                   case PNUM:
+                    toSend[2] = thisNode->num;
                     break;
                   case VAR:
                     toSend[2] = dataFromParents[finishedInitList][0][1];
